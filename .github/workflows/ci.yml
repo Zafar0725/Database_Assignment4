@@ -1,0 +1,76 @@
+name: CI - Flyway + Tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    services:
+      mysql:
+        image: mysql:8
+        env:
+          MYSQL_ROOT_PASSWORD: rootpass
+          MYSQL_DATABASE: appdb
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -prootpass"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=30
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Wait for MySQL to start
+        run: |
+          for i in {1..60}; do
+            mysqladmin ping -h 127.0.0.1 -prootpass && exit 0
+            sleep 2
+          done
+          exit 1
+
+      - name: Create app user (same as local)
+        run: |
+          mysql -h 127.0.0.1 -uroot -prootpass -e "
+            CREATE USER IF NOT EXISTS 'appuser'@'%' IDENTIFIED BY 'apppass';
+            GRANT ALL PRIVILEGES ON appdb.* TO 'appuser'@'%';
+            FLUSH PRIVILEGES;"
+
+      - name: Install Flyway CLI
+        run: |
+          curl -L https://repo1.maven.org/maven2/org/flywaydb/flyway-commandline/11.17.0/flyway-commandline-11.17.0-linux-x64.tar.gz -o flyway.tar.gz
+          tar -xzf flyway.tar.gz
+          echo "$GITHUB_WORKSPACE/flyway-11.17.0" >> $GITHUB_PATH
+
+      - name: Run migrations (initial + incremental)
+        env:
+          FLYWAY_URL: jdbc:mysql://127.0.0.1:3306/appdb?allowPublicKeyRetrieval=true&useSSL=false
+          FLYWAY_USER: appuser
+          FLYWAY_PASSWORD: apppass
+        run: |
+          flyway -locations=filesystem:flyway/migrations_initial,filesystem:flyway/migrations_incremental migrate
+
+      - name: Run CRUD tests
+        env:
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_NAME: appdb
+          DB_USER: appuser
+          DB_PASS: apppass
+        run: pytest -q
+
+      - name: Deployment done message
+        run: echo "Deployment done for commit $GITHUB_SHA"

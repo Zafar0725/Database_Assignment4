@@ -1,0 +1,21 @@
+---
+- name: Tear down MySQL
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    docker_network: flynet
+    mysql_container: mysql8
+
+  tasks:
+    - name: Stop MySQL container if running
+      shell: docker rm -f {{ mysql_container }}
+      register: rm_out
+      failed_when: false
+      changed_when: "'Error' not in rm_out.stderr"
+
+    - name: Remove network (ignore if in use or missing)
+      shell: docker network rm {{ docker_network }}
+      register: net_rm
+      failed_when: false
+      changed_when: "'Error' not in net_rm.stderr"

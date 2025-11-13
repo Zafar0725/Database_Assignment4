@@ -1,0 +1,60 @@
+---
+- name: Bring up MySQL and run Flyway migrations
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    docker_network: flynet
+    mysql_container: mysql8
+    mysql_image: mysql:8
+    mysql_root_password: rootpass
+    db_name: appdb
+    db_user: appuser
+    db_pass: apppass
+
+  tasks:
+    - name: Ensure Docker network exists
+      command: docker network create {{ docker_network }}
+      register: net_out
+      failed_when: net_out.rc not in [0,1]
+      changed_when: net_out.rc == 0
+
+    - name: Start MySQL container
+      command: >
+        docker run -d --rm
+        --name {{ mysql_container }}
+        --network {{ docker_network }}
+        -e MYSQL_ROOT_PASSWORD={{ mysql_root_password }}
+        -e MYSQL_DATABASE={{ db_name }}
+        -p 3307:3306
+        {{ mysql_image }}
+      register: mysql_run
+      failed_when: mysql_run.rc not in [0,125]
+      changed_when: mysql_run.rc == 0
+
+    - name: Wait for MySQL to be ready
+      shell: |
+        for i in $(seq 1 60); do
+          docker exec {{ mysql_container }} mysqladmin ping -h127.0.0.1 -p{{ mysql_root_password }} --silent && exit 0
+          sleep 2
+        done
+        exit 1
+      changed_when: false
+
+    - name: Create app user and grant privileges
+      shell: >
+        docker exec {{ mysql_container }}
+        mysql -uroot -p{{ mysql_root_password }}
+        -e "CREATE USER IF NOT EXISTS '{{ db_user }}'@'%' IDENTIFIED BY '{{ db_pass }}';
+            GRANT ALL PRIVILEGES ON {{ db_name }}.* TO '{{ db_user }}'@'%';
+            FLUSH PRIVILEGES;"
+
+    # (Optional safety) Fix any previous validation mismatches
+    - name: Flyway REPAIR (optional but safe)
+      shell: docker run --rm --network {{ docker_network }} -v "{{ playbook_dir }}/../flyway:/flyway/sql" -e FLYWAY_URL="jdbc:mysql://{{ mysql_container }}:3306/{{ db_name }}?allowPublicKeyRetrieval=true&useSSL=false" -e FLYWAY_USER="{{ db_user }}" -e FLYWAY_PASSWORD="{{ db_pass }}" flyway/flyway -locations=filesystem:/flyway/sql/migrations_initial,filesystem:/flyway/sql/migrations_incremental repair
+      changed_when: false
+      failed_when: false
+
+    # Run ALL migrations (initial + incremental) in one go so validation passes
+    - name: Run Flyway migrations (initial + incremental)
+      shell: docker run --rm --network {{ docker_network }} -v "{{ playbook_dir }}/../flyway:/flyway/sql" -e FLYWAY_URL="jdbc:mysql://{{ mysql_container }}:3306/{{ db_name }}?allowPublicKeyRetrieval=true&useSSL=false" -e FLYWAY_USER="{{ db_user }}" -e FLYWAY_PASSWORD="{{ db_pass }}" flyway/flyway -locations=filesystem:/flyway/sql/migrations_initial,filesystem:/flyway/sql/migrations_incremental migrate
