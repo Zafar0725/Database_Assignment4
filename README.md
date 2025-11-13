@@ -1,49 +1,104 @@
 # Q2 – Flyway + Ansible + CI/CD
 
-This project automates database setup, migrations, and testing using **Flyway**, **Ansible**, **Pytest**, and **GitHub Actions**.
+This project automates MySQL database setup, schema migrations, and CRUD validation using **Ansible**, **Flyway**, **Docker**, **pytest**, and **GitHub Actions**.
 
 ---
 
-## 🧩 Overview
-- **Ansible** provisions and tears down a MySQL container.
-- **Flyway** handles versioned database migrations.
-- **Pytest** runs CRUD tests to validate data operations.
-- **GitHub Actions** automates CI/CD by running migrations and tests on each commit.
+## 📌 What This Project Includes (Q2 Only)
+
+### ✔ Ansible Playbooks
+`ansible/up.yml`  
+- Creates Docker network  
+- Starts MySQL 8 container  
+- Creates database + user  
+- Runs **initial** + **incremental** Flyway migrations  
+
+`ansible/down.yml`  
+- Stops & removes the MySQL container
 
 ---
 
-## 🚀 Local Setup
+## ✔ Flyway Migrations
 
+### **migrations_initial/**
+- `V1__create_subscribers.sql`  
+  - Creates `subscribers` table
+
+### **migrations_incremental/**
+- `V2__add_index.sql`  
+  - Example schema update
+
+---
+
+## ✔ GitHub Actions CI/CD (`ci.yml`)
+
+The workflow:
+
+1. Starts a MySQL service (port 3306 inside CI)  
+2. Installs dependencies  
+3. Creates DB user  
+4. Runs **both** migration folders  
+5. Runs CRUD tests  
+6. Prints:  
+   **“Deployment done for commit <sha>”**
+
+---
+
+## ✔ Automated CRUD Tests (`tests/test_subscribers.py`)
+
+Tests verify:
+
+- **CREATE** – Insert a subscriber  
+- **READ** – Retrieve subscriber  
+- **UPDATE** – Modify subscriber  
+- **DELETE** – Delete subscriber  
+
+Ports used:
+- **3307** locally  
+- **3306** in CI (auto-handled)
+
+---
+
+## 📌 How to Run Locally
+
+### ▶ Start MySQL + run migrations
 ```bash
-# Start MySQL container and run migrations
 ansible-playbook ansible/up.yml
+```
 
-# Activate virtual environment and run tests
+### ▶ Create virtual environment
+```bash
+python3 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
-pytest -q
+```
 
-# Stop and remove containers
+### ▶ Install dependencies
+```bash
+pip install -r requirements.txt
+```
+
+### ▶ Run tests
+```bash
+pytest -q
+```
+
+### ▶ Tear down environment
+```bash
 ansible-playbook ansible/down.yml
 ```
 
-- Local MySQL port: **3307**
-- Default credentials: `appuser / apppass`
+---
+
+## 📌 Q2 Deliverables Completed
+
+- ✔ Ansible up/down playbooks  
+- ✔ Flyway initial + incremental migrations  
+- ✔ CI/CD pipeline  
+- ✔ CRUD test automation  
+- ✔ requirements.txt  
+- ✔ README.md (Q2 only)
 
 ---
 
-## ⚙️ CI/CD (GitHub Actions)
-The workflow file `.github/workflows/ci.yml` performs:
-1. Spins up a MySQL service (port 3306)
-2. Creates `appdb` and user `appuser`
-3. Runs Flyway migrations (initial + incremental)
-4. Executes Pytest CRUD tests
-5. Prints “Deployment done for commit ...”
-
-View the results under the **Actions** tab in GitHub.
-
----
-
-**Author:** Shaik Zafar Ahmed  
-**Course:** PROG 8850 – Cloud Development and Operations  
-**Assignment 4 – Q2: Flyway + Ansible + CI/CD**
+## ✅ Status
+Q2 is fully completed and ready for submission.
