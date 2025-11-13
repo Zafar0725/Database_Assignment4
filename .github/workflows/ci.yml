@@ -49,16 +49,10 @@ jobs:
             GRANT ALL PRIVILEGES ON appdb.* TO 'appuser'@'%';
             FLUSH PRIVILEGES;"
 
-      # ✅ Use Flyway Docker image instead of downloading a tar.gz
+      # Run migrations using Flyway Docker image in ONE line
       - name: Run migrations (initial + incremental)
         run: |
-          docker run --rm --network host \
-            -v "$GITHUB_WORKSPACE/flyway:/flyway/sql" \
-            -e FLYWAY_URL=jdbc:mysql://127.0.0.1:3306/appdb?allowPublicKeyRetrieval=true&useSSL=false \
-            -e FLYWAY_USER=appuser \
-            -e FLYWAY_PASSWORD=apppass \
-            flyway/flyway \
-            -locations=filesystem:/flyway/sql/migrations_initial,filesystem:/flyway/sql/migrations_incremental migrate
+          docker run --rm --network host -v "$GITHUB_WORKSPACE/flyway:/flyway/sql" -e FLYWAY_URL="jdbc:mysql://127.0.0.1:3306/appdb?allowPublicKeyRetrieval=true&useSSL=false" -e FLYWAY_USER="appuser" -e FLYWAY_PASSWORD="apppass" flyway/flyway -locations=filesystem:/flyway/sql/migrations_initial,filesystem:/flyway/sql/migrations_incremental migrate
 
       - name: Run CRUD tests
         env:
